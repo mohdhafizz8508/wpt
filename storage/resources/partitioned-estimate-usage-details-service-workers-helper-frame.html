@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<meta name=help href="https://privacycg.github.io/storage-partitioning/">
+<title>iframe</title>
+<script src="/common/dispatcher/dispatcher.js"></script>
+<script src="/common/utils.js"></script>
+<script src="../helpers.js"></script>
+<script src="../../IndexedDB/support-promises.js"></script>
+
+<body>
+  <script>
+    (async () => {
+      let usage_details = {};
+      usage_details.before_create = (await navigator.storage.estimate())
+        .usageDetails.serviceWorkerRegistrations || 0;
+
+      const target = window.opener || window.parent;
+      if (target)
+        target.postMessage(/*payload=*/usage_details, '*');
+    }
+    )();
+  </script>
+</body>
+
+</html>

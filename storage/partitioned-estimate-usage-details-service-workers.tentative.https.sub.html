@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<meta name=help href="https://privacycg.github.io/storage-partitioning/">
+<title>Storage Manager: partitioned usage estimate for indexedDB test</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+
+<body>
+  <script>
+    const wait_for_active = worker => new Promise(resolve => {
+      if (worker.active) { resolve(worker.active); }
+
+      const listen_for_active = worker => e => {
+        if (e.target.state === 'activated') { resolve(worker.active); }
+      }
+
+      if (worker.waiting) {
+        worker.waiting
+          .addEventListener('statechange', listen_for_active(worker.waiting));
+      }
+      if (worker.installing) {
+        worker.installing
+          .addEventListener('statechange', listen_for_active(worker.installing));
+      }
+    });
+
+    promise_test(async (test) => {
+      let alt_origin = "https://{{hosts[alt][]}}:{{ports[https][0]}}";
+      let usage_details = {};
+
+      usage_details.before_create = (await navigator.storage.estimate())
+        .usageDetails.serviceWorkerRegistrations || 0;
+
+      const service_worker_registration = await
+        navigator.serviceWorker.register('resources/worker.js');
+      await wait_for_active(service_worker_registration);
+
+      assert_true('serviceWorkerRegistrations'
+        in (await navigator.storage.estimate()).usageDetails);
+      usage_details.after_create = (await navigator.storage.estimate())
+        .usageDetails.serviceWorkerRegistrations || 0;
+      assert_less_than(usage_details.before_create, usage_details.after_create);
+
+      let iframe, second_window, src;
+      for (const alt_context of ["iframe", "window"]) {
+        for (const cross_site of [0, 1]) {
+          src = (cross_site ? `${alt_origin}/storage/` : "") +
+            "resources/partitioned-estimate-usage-details-service-workers" +
+            "-helper-frame.html";
+
+          if (alt_context == "iframe") {
+            iframe = document.createElement('iframe');
+            iframe.src = src;
+            document.body.appendChild(iframe);
+          }
+          else {
+            second_window = window.open(src, "", "noopener=false");
+          }
+
+          await new Promise(function (resolve) {
+            window.addEventListener("message", (event) => {
+              usage_details.alt_context = event.data;
+              resolve();
+            }, { once: true });
+          });
+
+          if (cross_site) {
+            assert_equals(usage_details.alt_context.before_create, 0);
+            assert_less_than(usage_details.alt_context.before_create,
+              usage_details.after_create);
+          } else {
+            assert_equals(usage_details.alt_context.before_create,
+              usage_details.after_create);
+          }
+
+          alt_context == "iframe" ? iframe.remove() : second_window.close();
+        }
+      }
+
+      await service_worker_registration.unregister();
+    }, 'Test Storage Manager: partitioned usage estimate for service workers.');
+  </script>
+</body>
+
+</html>

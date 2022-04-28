@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<meta name=help href="https://privacycg.github.io/storage-partitioning/">
+<title>Storage Manager: partitioned estimate for caches test</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/common/dispatcher/dispatcher.js"></script>
+<script src="/common/utils.js"></script>
+
+<body>
+  <script>
+    async function runTest(test, alt_context, cross_site) {
+      let usage_details = {};
+      let alt_origin = "https://{{hosts[alt][]}}:{{ports[https][0]}}";
+
+      // Access the document storage usage, before storing any data.
+      usage_details.pre_caching =
+        (await navigator.storage.estimate()).usageDetails.caches || 0;
+
+      // Create and populate a cache storage.
+      const cache_name = token();
+      const cache_url = `/foo-${cache_name}`;
+      const cache = await caches.open(cache_name);
+      await cache.put(cache_url, new Response('x'.repeat(128)));
+      test.add_cleanup(async () => {
+        await cache.delete(cache_url);
+      }); // auto-cleanup at test completion test.
+
+      // Reaccess the document storage usage.
+      assert_true('caches' in (await navigator.storage.estimate()).usageDetails);
+      usage_details.post_caching =
+        (await navigator.storage.estimate()).usageDetails.caches || 0;
+      assert_less_than(usage_details.pre_caching, usage_details.post_caching);
+
+      switch (alt_context) {
+        case "iframe":
+          const iframe = document.createElement('iframe');
+          iframe.src = (cross_site ? `${alt_origin}/storage/` : "") +
+            "resources/partitioned-estimate-usage-details-caches-" +
+            "helper-frame.html";
+          document.body.appendChild(iframe);
+          test.add_cleanup(async () => { await iframe.remove(); });
+          break;
+        case "window":
+          const src = (cross_site ? `${alt_origin}/storage/` : "") +
+            "resources/partitioned-estimate-usage-details-caches-" +
+            "helper-frame.html";
+          const second_window = window.open(src, "", "noopener=false");
+          test.add_cleanup(async () => { await second_window.close(); });
+          break;
+        default:
+          break;
+      }
+
+      await new Promise(function (resolve) {
+        window.addEventListener("message", (event) => {
+          usage_details.alt_context = event.data;
+          resolve();
+        }, { once: true });
+      });
+
+      if (cross_site) {
+        assert_equals(usage_details.alt_context.pre_caching, 0);
+      } else {
+        assert_equals(usage_details.post_caching,
+          usage_details.alt_context.pre_caching);
+      }
+    }
+
+    promise_test(async (test) => {
+      await runTest(test, "iframe", /*cross_site=*/0);
+    }, '1. Test Storage Manager: partitioned usage estimate for caches.');
+
+    promise_test(async (test) => {
+      await runTest(test, "iframe", /*cross_site=*/1);
+    }, '2. Test Storage Manager: partitioned usage estimate for caches.');
+
+    promise_test(async (test) => {
+      await runTest(test, "window", /*cross_site=*/0);
+    }, '3. Test Storage Manager: partitioned usage estimate for caches.');
+
+    promise_test(async (test) => {
+      await runTest(test, "window", /*cross_site=*/1);
+    }, '4. Test Storage Manager: partitioned usage estimate for caches.');
+  </script>
+</body>
+
+</html>

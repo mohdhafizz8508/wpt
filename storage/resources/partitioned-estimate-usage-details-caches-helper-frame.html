@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<meta name=help href="https://privacycg.github.io/storage-partitioning/">
+<title>iframe</title>
+<script src="/common/dispatcher/dispatcher.js"></script>
+<script src="/common/utils.js"></script>
+
+<body>
+  <script>
+    (async () => {
+      let usage_details = {};
+      // Access the document storage usage, before storing any data.
+      let estimate = await navigator.storage.estimate();
+      usage_details.pre_caching = estimate.usageDetails.caches || 0;
+
+      // Create and populate a cache storage.
+      const cache_name = token();
+      const cache_url = `/foo-${cache_name}`;
+      const cache = await caches.open(cache_name);
+      await cache.put(cache_url, new Response('x'.repeat(128)));
+
+      // Reaccess the document storage usage.
+      estimate = await navigator.storage.estimate();
+      usage_details.post_caching = estimate.usageDetails.caches || 0;
+
+      const target = window.opener || window.parent;
+      if (target)
+        target.postMessage(/*payload=*/usage_details, '*');
+
+      cache.delete(cache_url);
+    }
+    )();
+  </script>
+</body>
+
+</html>
