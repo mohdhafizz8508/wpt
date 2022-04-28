@@ -44,6 +44,60 @@ test(t => {
   frame.close();
 }, 'Test we can construct a VideoFrame with a negative timestamp.');
 
+function verifyTimestampRequiredToConstructFrame(imageSource) {
+  assert_throws_js(
+      TypeError,
+      () => new VideoFrame(imageSource),
+      'timestamp required to construct VideoFrame from this source');
+  let validFrame = new VideoFrame(imageSource, {timestamp: 0});
+  validFrame.close();
+}
+
+promise_test(async t => {
+  let imgElement = document.createElement('img');
+  let loadPromise = new Promise(r => imgElement.onload = r);
+  imgElement.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+  await loadPromise;
+  verifyTimestampRequiredToConstructFrame(imgElement);
+}, 'Test that timestamp is required when constructing VideoFrame from HTMLImageElement');
+
+promise_test(async t => {
+    let svgImageElement = document.createElementNS('http://www.w3.org/2000/svg','image');
+    let loadPromise = new Promise(r => svgImageElement.onload = r);
+    svgImageElement.setAttributeNS('http://www.w3.org/1999/xlink','href','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==');
+    await loadPromise;
+    verifyTimestampRequiredToConstructFrame(svgImageElement);
+}, 'Test that timestamp is required when constructing VideoFrame from SVGImageElement');
+
+promise_test(async t => {
+  verifyTimestampRequiredToConstructFrame(document.createElement('canvas'))
+}, 'Test that timeamp is required when constructing VideoFrame from HTMLCanvasElement');
+
+promise_test(async t => {
+  verifyTimestampRequiredToConstructFrame(makeImageBitmap(1, 1));
+}, 'Test that timestamp is required when constructing VideoFrame from ImageBitmap');
+
+promise_test(async t => {
+  verifyTimestampRequiredToConstructFrame(makeOffscreenCanvas(16, 16));
+}, 'Test that timestamp is required when constructing VideoFrame from OffscreenCanvas');
+
+promise_test(async t => {
+  let init = {
+    format: 'I420',
+    timestamp: 1234,
+    codedWidth: 4,
+    codedHeight: 2
+  };
+  let data = new Uint8Array([
+    1, 2, 3, 4, 5, 6, 7, 8,  // y
+    1, 2,                    // u
+    1, 2,                    // v
+  ]);
+  let i420Frame = new VideoFrame(data, init);
+  let validFrame = new VideoFrame(i420Frame);
+  validFrame.close();
+}, 'Test that timestamp is NOT required when constructing VideoFrame from another VideoFrame');
+
 test(t => {
   let image = makeImageBitmap(1, 1);
   let frame = new VideoFrame(image, {timestamp: 10});
@@ -678,3 +732,4 @@ test(t => {
       'plane format should not have alpha: ' + frame.format);
   frame.close();
 }, 'Test a VideoFrame constructed from canvas can drop the alpha channel.');
+
